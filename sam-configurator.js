@@ -84,6 +84,23 @@ function buildPalettesFromApi(colors) {
   return out;
 }
 
+// Derive layer stack from base + the product's accessories.
+// Layers render bottom-to-top by zIndex.
+function deriveLayers(accessories) {
+  const layers = [
+    { key: "panel",    folder: "panel",    zIndex: 1 },
+    { key: "interior", folder: "interior", zIndex: 2 }
+  ];
+  (accessories || []).forEach(a => {
+    if (a.layerKey) {
+      layers.push({ key: a.layerKey, folder: "accessories", zIndex: 3 });
+    }
+  });
+  layers.push({ key: "exterior", folder: "exterior", zIndex: 4 });
+  layers.push({ key: "door",     folder: "frame",    zIndex: 5 });
+  return layers;
+}
+
 // Transform a Payload product doc into the in-memory shape the configurator expects.
 function transformProduct(p) {
   const accessoryItems = (p.accessories || []).map(a => ({
@@ -109,7 +126,7 @@ function transformProduct(p) {
     allGlassCode: p.allGlassCode,
     exteriorPaletteKey: p.exteriorPalette && p.exteriorPalette.key,
     interiorPaletteKey: p.interiorPalette && p.interiorPalette.key,
-    layers: (p.layers || []).map(l => ({ key: l.key, folder: l.folder, zIndex: l.zIndex })),
+    layers: deriveLayers(accessoryItems),
     panels:  (p.panels  || []).map(pn => ({ code: pn.code, label: pn.label, icon: pn.icon })),
     accessories: accessoryItems.length ? { mode: "multi", items: accessoryItems } : undefined,
     panelMissingInteriors
