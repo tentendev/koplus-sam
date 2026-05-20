@@ -1,67 +1,25 @@
 /**
  * SAM Booth Configurator — Framery-style accordion UI
+ *
+ * Data source: Payload CMS API.
+ * PALETTES is populated at boot via fetchCatalogue() — see SamApp().
  */
 
 /* ================================================================
-   COLOUR PALETTES — per layer, keyed by SKU code
+   COLOUR PALETTES — hydrated from API at boot
    ================================================================ */
-const PALETTES = {
-  // Exterior finish for Single + Large booths (default)
-  exterior: {
-    WH: { name: "White",         bg: "#dbdbdb", border: "#dbdbdb" },
-    GG: { name: "Graphite Grey", bg: "#5a5b58", border: "#5a5b58" },
-    DK: { name: "Black",         bg: "#1e2618", border: "#1e2618" },
-    PK: { name: "Dusty Rose",    bg: "#e79f93", border: "#e79f93" },
-    RD: { name: "Bright Red",    bg: "#bd4416", border: "#bd4416" },
-    BR: { name: "Brick Red",     bg: "#93311c", border: "#93311c" },
-    CP: { name: "Cappuccino",    bg: "#d7d2b3", border: "#d7d2b3" },
-    YE: { name: "Yellow",        bg: "#ebbd00", border: "#ebbd00" },
-    GR: { name: "Forest Green",  bg: "#134d22", border: "#134d22" },
-    LB: { name: "Sky Blue",      bg: "#80bfc9", border: "#80bfc9" },
-    NB: { name: "Navy Blue",     bg: "#14335d", border: "#14335d" },
-    PP: { name: "Purple",        bg: "#5f3350", border: "#5f3350" }
-  },
-  // Exterior finish for Medium booth (different SKU codes)
-  exteriorMedium: {
-    WH: { name: "White",         bg: "#dbdbdb", border: "#dbdbdb" },
-    GG: { name: "Graphite Grey", bg: "#5a5b58", border: "#5a5b58" },
-    BK: { name: "Black",         bg: "#1e2618", border: "#1e2618" },
-    DR: { name: "Dusty Rose",    bg: "#e79f93", border: "#e79f93" },
-    BR: { name: "Brick Red",     bg: "#93311c", border: "#93311c" },
-    PM: { name: "Plum",          bg: "#5f3350", border: "#5f3350" },
-    CP: { name: "Cappuccino",    bg: "#d7d2b3", border: "#d7d2b3" },
-    YE: { name: "Yellow",        bg: "#ebbd00", border: "#ebbd00" },
-    FG: { name: "Forest Green",  bg: "#134d22", border: "#134d22" },
-    SB: { name: "Sky Blue",      bg: "#80bfc9", border: "#80bfc9" },
-    NB: { name: "Navy Blue",     bg: "#14335d", border: "#14335d" },
-    PP: { name: "Purple",        bg: "#5f3350", border: "#5f3350" }
-  },
-  // Interior PET fabric
-  interior: {
-    BWH: { name: "Blended White", bg: "#f0ece4", border: "#d1d5db", swatch: "assets/swatches/BWH.jpg" },
-    LTG: { name: "Light Grey",    bg: "#9ca3af", border: "#9ca3af", swatch: "assets/swatches/LTG.jpg" },
-    DKG: { name: "Dark Grey",     bg: "#4b5563", border: "#4b5563", swatch: "assets/swatches/DKG.jpg" },
-    BUR: { name: "Burgundy",      bg: "#6b1d2a", border: "#6b1d2a", swatch: "assets/swatches/BUR.jpg" },
-    TAU: { name: "Taupe",         bg: "#c4b8a5", border: "#c4b8a5", swatch: "assets/swatches/TAU.jpg" },
-    GRN: { name: "Green",         bg: "#166534", border: "#166534", swatch: "assets/swatches/GRN.jpg" },
-    BLU: { name: "Blue",          bg: "#3b82f6", border: "#3b82f6", swatch: "assets/swatches/BLU.jpg" }
-  },
-  // Accessory: desk surfaces (flex-desk, flip-desk)
-  accDesk: {
-    WH: { name: "White", bg: "#ffffff", border: "#d1d5db" },
-    BK: { name: "Black", bg: "#1a1a1a", border: "#1a1a1a" }
-  },
-  // Accessory: upholstery for sofa + bench (bench excludes GLB via excludeCodes)
-  accUpholstery: {
-    GBN: { name: "Burgundy",   bg: "#6b1d2a", border: "#6b1d2a" },
-    GDB: { name: "Dark Blue",  bg: "#1e3a5f", border: "#1e3a5f" },
-    GDG: { name: "Dark Grey",  bg: "#4b5563", border: "#4b5563" },
-    GGR: { name: "Green",      bg: "#166534", border: "#166534" },
-    GLB: { name: "Light Blue", bg: "#a5d8e6", border: "#a5d8e6" },
-    GPP: { name: "Purple",     bg: "#4c1d6e", border: "#4c1d6e" },
-    GRD: { name: "Red",        bg: "#b91c1c", border: "#b91c1c" },
-    GYE: { name: "Yellow",     bg: "#eab308", border: "#eab308" }
-  }
+const PALETTES = {};
+
+// Local-only swatch image overrides (interior PET fabric textures).
+// Keyed by code; merged on top of API color data.
+const LOCAL_SWATCH_IMAGES = {
+  BWH: "assets/swatches/BWH.jpg",
+  LTG: "assets/swatches/LTG.jpg",
+  DKG: "assets/swatches/DKG.jpg",
+  BUR: "assets/swatches/BUR.jpg",
+  TAU: "assets/swatches/TAU.jpg",
+  GRN: "assets/swatches/GRN.jpg",
+  BLU: "assets/swatches/BLU.jpg"
 };
 
 // Convert a palette object into a swatch array.
@@ -94,21 +52,113 @@ const ICON_CHECK = '<svg class="h-4 w-4" fill="none" stroke="currentColor" strok
 const ICON_CHEVRON_DOWN = '<svg class="h-5 w-5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7"/></svg>';
 
 /* ================================================================
+   API CLIENT — fetches catalogue from Payload CMS
+   ================================================================ */
+async function fetchCatalogue(apiBase) {
+  const [productsRes, colorsRes] = await Promise.all([
+    fetch(`${apiBase}/api/products?depth=2&limit=100&sort=sortOrder`),
+    fetch(`${apiBase}/api/colors?depth=1&limit=200&sort=sortOrder`)
+  ]);
+  if (!productsRes.ok) throw new Error(`Products fetch failed: ${productsRes.status}`);
+  if (!colorsRes.ok)   throw new Error(`Colors fetch failed: ${colorsRes.status}`);
+  const productsJson = await productsRes.json();
+  const colorsJson   = await colorsRes.json();
+  return { products: productsJson.docs, colors: colorsJson.docs };
+}
+
+// Build the PALETTES dictionary from the colors collection.
+function buildPalettesFromApi(colors) {
+  const out = {};
+  for (const c of colors) {
+    const paletteKey = (c.palette && c.palette.key) || null;
+    if (!paletteKey) continue;
+    if (!out[paletteKey]) out[paletteKey] = {};
+    const entry = {
+      name: c.name,
+      bg: c.bgColor,
+      border: c.borderColor || c.bgColor
+    };
+    if (LOCAL_SWATCH_IMAGES[c.code]) entry.swatch = LOCAL_SWATCH_IMAGES[c.code];
+    out[paletteKey][c.code] = entry;
+  }
+  return out;
+}
+
+// Transform a Payload product doc into the in-memory shape the configurator expects.
+function transformProduct(p) {
+  const accessoryItems = (p.accessories || []).map(a => ({
+    code: a.code,
+    label: a.label,
+    layerKey: a.layerKey,
+    skuTemplate: a.skuTemplate,
+    defaultColour: a.defaultColorCode,
+    paletteKey: a.palette && a.palette.key,
+    excludeCodes: (a.excludedColorCodes || []).map(x => x.code)
+  }));
+  const panelMissingInteriors = {};
+  (p.panelRestrictions || []).forEach(r => {
+    panelMissingInteriors[r.panelCode] = (r.excludedInteriorCodes || []).map(x => x.code);
+  });
+  return {
+    key: p.slug,
+    label: p.label,
+    title: p.title,
+    subtitle: p.subtitle || "",
+    skuPrefix: p.skuPrefix,
+    assetBase: p.assetBaseUrl,
+    allGlassCode: p.allGlassCode,
+    exteriorPaletteKey: p.exteriorPalette && p.exteriorPalette.key,
+    interiorPaletteKey: p.interiorPalette && p.interiorPalette.key,
+    layers: (p.layers || []).map(l => ({ key: l.key, folder: l.folder, zIndex: l.zIndex })),
+    panels:  (p.panels  || []).map(pn => ({ code: pn.code, label: pn.label, icon: pn.icon })),
+    accessories: accessoryItems.length ? { mode: "multi", items: accessoryItems } : undefined,
+    panelMissingInteriors
+  };
+}
+
+/* ================================================================
    APP WRAPPER
    ================================================================ */
 function SamApp(appConfig) {
   const root = document.querySelector(appConfig.el);
-  const products = appConfig.products;
-  let activeKey = products[0].key;
+  const apiBase = appConfig.apiBase || "http://localhost:3000";
+
+  root.innerHTML = `
+    <div style="min-height:60vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;color:#6b7280;font-family:system-ui,sans-serif">
+      <svg class="animate-spin" style="height:32px;width:32px;color:#061629" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.25"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path></svg>
+      <div style="font-size:14px">Loading catalogue…</div>
+    </div>`;
+
+  let products = [];
+  let activeKey = "";
+
+  fetchCatalogue(apiBase)
+    .then(({ products: productDocs, colors }) => {
+      // Hydrate PALETTES from API
+      const built = buildPalettesFromApi(colors);
+      Object.assign(PALETTES, built);
+      // Transform products
+      products = productDocs.map(transformProduct);
+      if (!products.length) throw new Error("No products returned from API");
+      activeKey = products[0].key;
+      window._samSwitchTo = switchTo;
+      switchTo(activeKey);
+    })
+    .catch(err => {
+      console.error("[SamApp] Catalogue load failed:", err);
+      root.innerHTML = `
+        <div style="min-height:60vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0.5rem;color:#b91c1c;font-family:system-ui,sans-serif;text-align:center;padding:2rem">
+          <div style="font-size:16px;font-weight:600">Unable to load configurator</div>
+          <div style="font-size:13px;color:#6b7280">${String(err.message || err)}</div>
+          <div style="font-size:12px;color:#9ca3af;margin-top:0.5rem">Make sure the Payload backend is running at ${apiBase}</div>
+        </div>`;
+    });
 
   function switchTo(key) {
     activeKey = key;
     const config = products.find(p => p.key === key);
     renderConfigurator(config);
   }
-
-  window._samSwitchTo = switchTo;
-  switchTo(activeKey);
 
   /* ==============================================================
      CONFIGURATOR
