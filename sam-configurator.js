@@ -10,16 +10,27 @@
    ================================================================ */
 const PALETTES = {};
 
-// Local-only swatch image overrides (interior PET fabric textures).
-// Keyed by code; merged on top of API color data.
+// Local-only swatch image overrides. Keyed by code; merged on top of API
+// color data. Interior PET felt textures live in assets/swatches/; accessory
+// upholstery (bench/sofa) woven textures live in assets/access-swatches/.
 const LOCAL_SWATCH_IMAGES = {
+  // Interior PET (felt)
   BWH: "assets/swatches/BWH.jpg",
   LTG: "assets/swatches/LTG.jpg",
   DKG: "assets/swatches/DKG.jpg",
   BUR: "assets/swatches/BUR.jpg",
   TAU: "assets/swatches/TAU.jpg",
   GRN: "assets/swatches/GRN.jpg",
-  BLU: "assets/swatches/BLU.jpg"
+  BLU: "assets/swatches/BLU.jpg",
+  // Accessory upholstery (woven) — Flex Bench / Milli Sofa
+  GYE: "assets/access-swatches/GYE.jpg",
+  GPP: "assets/access-swatches/GPP.jpg",
+  GGR: "assets/access-swatches/GGR.jpg",
+  GDG: "assets/access-swatches/GDG.jpg",
+  GDB: "assets/access-swatches/GDB.jpg",
+  GLB: "assets/access-swatches/GLB.jpg",
+  GRD: "assets/access-swatches/GRD.jpg",
+  GBN: "assets/access-swatches/GBN.jpg"
 };
 
 // Convert a palette object into a swatch array.
@@ -290,17 +301,38 @@ function SamApp(appConfig) {
     }
 
     // ── Image loading ──
-    function loadLayer(key) {
+    // Preload + decode the affected layers off-screen, then swap them all
+    // in place in a single frame. The old images stay visible until every
+    // new one is decoded, so the switch is instant and the layers never
+    // desync — no fade-out gap, no flicker.
+    function loadLayers(keys) {
       const skus = getSKUs();
-      const sku  = skus[key];
-      const img  = layerEls[key];
-      if (!img) return;
-      if (!sku) { img.src = ""; img.style.opacity = 0; return; }
-      img.style.opacity = 0;
-      img.src = `${config.assetBase}/${layerFolderMap[key]}/${sku}.png`;
-      img.onload  = () => { img.style.opacity = 1; hidePlaceholder(); };
-      img.onerror = () => { img.style.opacity = 0; };
+      const jobs = [];
+      keys.forEach(key => {
+        const img = layerEls[key];
+        if (!img) return;
+        const sku = skus[key];
+        if (!sku) { img.removeAttribute("src"); img.style.opacity = 0; return; }
+        const newSrc = `${config.assetBase}/${layerFolderMap[key]}/${sku}.png`;
+        if (img.src === newSrc && img.style.opacity === "1") return;
+        const preload = new Image();
+        preload.src = newSrc;
+        const decoded = preload.decode
+          ? preload.decode().then(() => true, () => false)
+          : new Promise(res => { preload.onload = () => res(true); preload.onerror = () => res(false); });
+        jobs.push(decoded.then(ok => ({ img, newSrc, ok })));
+      });
+      if (!jobs.length) return;
+      Promise.all(jobs).then(results => {
+        results.forEach(({ img, newSrc, ok }) => {
+          if (ok) img.src = newSrc;
+          img.style.opacity = ok ? 1 : 0;
+        });
+        hidePlaceholder();
+      });
     }
+
+    function loadLayer(key) { loadLayers([key]); }
 
     function loadAllLayers() {
       Object.values(layerEls).forEach(img => { if (img) img.style.opacity = 0; });
@@ -317,7 +349,39 @@ function SamApp(appConfig) {
           img.onerror = () => { img.style.opacity = 0; resolve(); };
         });
       });
-      Promise.all(promises).then(() => placeholder.classList.add("hidden"));
+      Promise.all(promises).then(() => {
+        placeholder.classList.add("hidden");
+        prefetchVariants();
+      });
+    }
+
+    // Warm the browser cache with every colour / panel / accessory variant
+    // so later swatch clicks resolve from cache and swap in with no delay.
+    // Runs in the background after the initial booth has rendered.
+    function prefetchVariants() {
+      const urls = new Set();
+      const add = (folder, sku) => { if (folder && sku) urls.add(`${config.assetBase}/${folder}/${sku}.png`); };
+
+      ["LT", "RT"].forEach(c => add(layerFolderMap.door, `L1_DR_YY_${c}`));
+      exteriorPalette.forEach(c => add(layerFolderMap.exterior, `L2_${config.skuPrefix}_NA_${c.code}`));
+      interiorPalette.forEach(c => add(layerFolderMap.interior, `L4_${config.skuPrefix}_NA_${c.code}`));
+
+      // Back panel walls take the interior colour, so prefetch every panel × interior combo.
+      add(layerFolderMap.panel, `L5_${config.allGlassCode}_000`);
+      config.panels.forEach(p => {
+        if (p.code === config.allGlassCode) return;
+        interiorPalette.forEach(c => add(layerFolderMap.panel, `L5_${p.code}_${c.code}`));
+      });
+
+      if (config.accessories) {
+        config.accessories.items.forEach(acc => {
+          if (!acc.layerKey || !acc.skuTemplate) return;
+          (acc.colours || []).forEach(c =>
+            add(layerFolderMap[acc.layerKey], acc.skuTemplate.replace("{colour}", c.code)));
+        });
+      }
+
+      urls.forEach(url => { const img = new Image(); img.decoding = "async"; img.src = url; });
     }
 
     function hidePlaceholder() {
@@ -335,9 +399,10 @@ function SamApp(appConfig) {
         btn.classList.add("on");
         state[stateKey] = btn.dataset.code;
         updateRowSummary(stateKey, btn.dataset.name);
-        loadLayer(layerKey);
-        // Also reload panel when interior changes (wall colour = interior colour)
-        if (stateKey === "interior") loadLayer("panel");
+        // Interior colour also paints the back-panel walls — swap both
+        // layers together so they never appear out of sync.
+        if (stateKey === "interior") loadLayers(["interior", "panel"]);
+        else loadLayer(layerKey);
       });
     }
 
@@ -375,7 +440,6 @@ function SamApp(appConfig) {
         if (fallback) fallback.classList.add("on");
         state.interior = "BWH";
         updateRowSummary("interior", "Blended White");
-        loadLayer("interior");
       }
     }
 
@@ -391,7 +455,9 @@ function SamApp(appConfig) {
         state.panel = btn.dataset.panel;
         updateRowSummary("backpanel", btn.dataset.label);
         updateInteriorAvailability();
-        loadLayer("panel");
+        // updateInteriorAvailability may fall the interior back to BWH;
+        // swap panel + interior together (the guard skips interior if unchanged).
+        loadLayers(["panel", "interior"]);
       });
     });
 
@@ -478,7 +544,7 @@ function SamApp(appConfig) {
       <div class="lg:w-3/5 lg:sticky lg:top-8 lg:self-start">
         <div id="pod-image" class="relative rounded-xl lg:rounded-2xl bg-gradient-to-b from-gray-50 to-white aspect-[4/3] overflow-hidden">
           ${config.layers.map(l =>
-            `<img id="layer-${l.key}" class="absolute inset-0 h-full w-full object-contain transition-opacity duration-500" style="z-index:${l.zIndex}; opacity:0" src="" alt="${l.key} layer">`
+            `<img id="layer-${l.key}" class="absolute inset-0 h-full w-full object-contain" style="z-index:${l.zIndex}; opacity:0" src="" alt="${l.key} layer">`
           ).join("\n          ")}
           <div id="img-placeholder" class="absolute inset-0 flex items-center justify-center transition-opacity duration-300">
             <svg class="animate-spin h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24">
