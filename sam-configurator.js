@@ -61,6 +61,7 @@ PANEL_ICONS["2wall"]  = PANEL_ICONS.wall;
    ================================================================ */
 const ICON_CHECK = '<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
 const ICON_CHEVRON_DOWN = '<svg class="h-5 w-5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7"/></svg>';
+const ICON_LOCK = '<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path stroke-linecap="round" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
 /* ================================================================
    API CLIENT — fetches catalogue from Payload CMS
@@ -205,6 +206,24 @@ function SamApp(appConfig) {
       });
     }
 
+    // SAM Single: the Flex Desk is a standard feature, not an optional accessory.
+    // It renders below Exterior Color and its surface colour is locked to the
+    // exterior — White exterior → White desk, any other → Black desk.
+    const deskItem = config.key === "single" && config.accessories
+      ? config.accessories.items.find(a => a.layerKey === "accDesk")
+      : null;
+    const optionalAccessories = config.accessories
+      ? config.accessories.items.filter(a => a !== deskItem)
+      : [];
+
+    function deskColour() {
+      return state.exterior === "WH" ? "WH" : "BK";
+    }
+    function deskColourName(code) {
+      const c = ((deskItem && deskItem.colours) || []).find(x => x.code === code);
+      return c ? c.name : (code === "WH" ? "White" : "Black");
+    }
+
     // ── State ──
     const state = {
       door:       "LT",
@@ -222,6 +241,11 @@ function SamApp(appConfig) {
           state.accessoryColours[a.code] = a.defaultColour || a.colours[0].code;
         }
       });
+      // Desk is standard (always rendered) with its colour locked to the exterior.
+      if (deskItem) {
+        state.accessories[deskItem.code] = true;
+        state.accessoryColours[deskItem.code] = deskColour();
+      }
     }
 
     // ── SKU builder ──
@@ -259,6 +283,7 @@ function SamApp(appConfig) {
     const placeholder  = root.querySelector("#img-placeholder");
     const exteriorSec  = root.querySelector('[data-row="exterior"]');
     const interiorSec  = root.querySelector('[data-row="interior"]');
+    const deskSec      = root.querySelector('[data-row="desk"]');
 
     // ── Accordion logic ──
     root.querySelectorAll(".cfg-row-header").forEach(header => {
@@ -390,6 +415,35 @@ function SamApp(appConfig) {
       }
     }
 
+    // Tint each upholstery swatch's ring to its fabric's own colour, sampled
+    // from the image, so the border blends with the texture instead of showing
+    // the flat catalogue colour. Same-origin images, so canvas reads are safe.
+    function averageImageColour(img) {
+      try {
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = 16;
+        const ctx = cv.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+        return `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function tintAccessorySwatchBorders() {
+      root.querySelectorAll(".acc-swatch > img").forEach(img => {
+        const apply = () => {
+          const colour = averageImageColour(img);
+          if (colour && img.parentElement) img.parentElement.style.borderColor = colour;
+        };
+        if (img.complete && img.naturalWidth) apply();
+        else img.addEventListener("load", apply, { once: true });
+      });
+    }
+
     // ── Events: Swatches ──
     function setupSwatchRow(rowEl, stateKey, layerKey) {
            rowEl.addEventListener("click", e => {
@@ -401,9 +455,28 @@ function SamApp(appConfig) {
         updateRowSummary(stateKey, btn.dataset.name);
         // Interior colour also paints the back-panel walls — swap both
         // layers together so they never appear out of sync.
-        if (stateKey === "interior") loadLayers(["interior", "panel"]);
-        else loadLayer(layerKey);
+        if (stateKey === "interior") {
+          loadLayers(["interior", "panel"]);
+        } else if (stateKey === "exterior" && deskItem) {
+          // Desk surface is locked to the exterior colour — rebind and swap together.
+          applyDeskBinding();
+          loadLayers(["exterior", "accDesk"]);
+        } else {
+          loadLayer(layerKey);
+        }
       });
+    }
+
+    // Keep the locked desk surface in sync with the current exterior colour.
+    function applyDeskBinding() {
+      if (!deskItem) return;
+      const code = deskColour();
+      state.accessoryColours[deskItem.code] = code;
+      updateRowSummary("desk", deskColourName(code));
+      if (deskSec) {
+        deskSec.querySelectorAll(".desk-swatch").forEach(s =>
+          s.classList.toggle("on", s.dataset.code === code));
+      }
     }
 
     setupSwatchRow(exteriorSec, "exterior", "exterior");
@@ -515,6 +588,7 @@ function SamApp(appConfig) {
 
     // ── Init ──
     loadAllLayers();
+    tintAccessorySwatchBorders();
 
     /* ==============================================================
        HTML BUILDER
@@ -544,7 +618,7 @@ function SamApp(appConfig) {
       <div class="lg:w-3/5 lg:sticky lg:top-8 lg:self-start">
         <div id="pod-image" class="relative rounded-xl lg:rounded-2xl bg-gradient-to-b from-gray-50 to-white aspect-[4/3] overflow-hidden">
           ${config.layers.map(l =>
-            `<img id="layer-${l.key}" class="absolute inset-0 h-full w-full object-contain" style="z-index:${l.zIndex}; opacity:0" src="" alt="${l.key} layer">`
+            `<img id="layer-${l.key}" class="pod-layer absolute inset-0 h-full w-full object-contain" style="z-index:${l.zIndex}; opacity:0" src="" alt="${l.key} layer">`
           ).join("\n          ")}
           <div id="img-placeholder" class="absolute inset-0 flex items-center justify-center transition-opacity duration-300">
             <svg class="animate-spin h-6 w-6 text-gray-300" fill="none" viewBox="0 0 24 24">
@@ -647,7 +721,7 @@ function SamApp(appConfig) {
                 </div>
               </div>
             </div>
-
+            ${renderDeskRow()}
             <!-- Interior Colour -->
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="interior">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
@@ -669,7 +743,7 @@ function SamApp(appConfig) {
           </div>
         </div>
 
-        ${config.accessories ? `
+        ${optionalAccessories.length ? `
         <!-- ═══ Section: Accessories ═══ -->
         <div class="cfg-section">
           <button class="section-toggle w-full flex items-center justify-between py-2">
@@ -677,7 +751,7 @@ function SamApp(appConfig) {
             <span class="section-chevron text-gray-400 transition-transform" style="transform:rotate(180deg)">${ICON_CHEVRON_DOWN}</span>
           </button>
           <div class="section-body space-y-3 pt-2">
-            ${config.accessories.items.map(a => `
+            ${optionalAccessories.map(a => `
             <div class="space-y-2">
               <button data-acc="${a.code}" class="acc-toggle w-full flex items-center justify-between rounded-xl ring-1 ring-gray-200 px-4 py-3 text-left transition hover:ring-gray-400">
                 <div class="text-sm font-semibold text-gray-900">${a.label}</div>
@@ -718,6 +792,9 @@ function SamApp(appConfig) {
     .swatch, .acc-swatch { cursor:pointer; transition: transform 0.15s ease; }
     .swatch:hover, .acc-swatch:hover { transform: scale(1.08); }
     .swatch.on, .acc-swatch.on { box-shadow:0 0 0 2px #fff, 0 0 0 3px #061629; }
+    .desk-swatch { display:inline-block; cursor:not-allowed; }
+    .desk-swatch.on { box-shadow:0 0 0 2px #fff, 0 0 0 3px #061629; }
+    .desk-swatch:not(.on) { opacity:.3; }
     .swatch.unavailable, .acc-swatch.unavailable {
       background: #d8d4cc !important;
       border-color: #bfb9ae !important;
@@ -743,6 +820,9 @@ function SamApp(appConfig) {
     .cfg-section + .cfg-section { border-top: 1px solid #f3f4f6; padding-top: 1.25rem; }
     .section-chevron svg { transition: transform 0.2s ease; }
     #img-placeholder.hidden { display: flex !important; opacity: 0; pointer-events: none; }
+    /* Source renders come in a touch dark — lift the composited product.
+       Stop-gap until/unless Koplus re-exports brighter layers. Tune here. */
+    .pod-layer { filter: brightness(1.15); }
   </style>`;
     }
 
@@ -758,6 +838,36 @@ function SamApp(appConfig) {
         }
         return `<button data-code="${c.code}" data-name="${c.name}" class="swatch${on}${unavailable} h-9 w-9 rounded-full border-2 transition" style="background:${c.bg};border-color:${c.border}"></button>`;
       }).join("\n                  ");
+    }
+
+    // Standard desk-surface row (Single only). Surface colour is locked to the
+    // exterior, so the swatches are display-only (non-interactive <span>s).
+    function renderDeskRow() {
+      if (!deskItem) return "";
+      const active = deskColour();
+      const swatches = (deskItem.colours || []).map(c => {
+        const on = c.code === active ? " on" : "";
+        return `<span data-code="${c.code}" title="${c.name}" class="desk-swatch${on} h-9 w-9 rounded-full border-2" style="background:${c.bg};border-color:${c.border || c.bg}"></span>`;
+      }).join("\n                  ");
+      return `
+            <!-- Desk surface (standard; surface colour locked to exterior) -->
+            <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="desk">
+              <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
+                <div>
+                  <div class="text-sm font-semibold text-gray-900">Desk surface</div>
+                  <div class="row-value text-xs text-gray-500">${deskColourName(active)}</div>
+                </div>
+                <div class="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
+                  Auto ${ICON_LOCK}
+                </div>
+              </button>
+              <div class="cfg-row-body hidden px-4 pb-4">
+                <div class="flex flex-wrap gap-2.5 pt-2">
+                  ${swatches}
+                </div>
+                <div class="text-xs text-gray-400 mt-2">Automatically matched to the exterior color — White exterior uses a white desk surface, all others use black.</div>
+              </div>
+            </div>`;
     }
   }
 }
