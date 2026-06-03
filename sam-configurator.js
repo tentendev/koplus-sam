@@ -299,8 +299,10 @@ function SamApp(appConfig) {
 
     // ── DOM refs ──
     const layerEls = {};
+    const thumbEls = {};
     config.layers.forEach(l => {
       layerEls[l.key] = root.querySelector(`#layer-${l.key}`);
+      thumbEls[l.key] = root.querySelector(`#thumb-${l.key}`);
     });
     const placeholder  = root.querySelector("#img-placeholder");
     const exteriorSec  = root.querySelector('[data-row="exterior"]');
@@ -366,8 +368,13 @@ function SamApp(appConfig) {
       keys.forEach(key => {
         const img = layerEls[key];
         if (!img) return;
+        const thumb = thumbEls[key];
         const sku = skus[key];
-        if (!sku) { img.removeAttribute("src"); img.style.opacity = 0; return; }
+        if (!sku) {
+          img.removeAttribute("src"); img.style.opacity = 0;
+          if (thumb) { thumb.removeAttribute("src"); thumb.style.opacity = 0; }
+          return;
+        }
         const newSrc = `${config.assetBase}/${layerFolderMap[key]}/${sku}.png`;
         if (img.src === newSrc && img.style.opacity === "1") return;
         const preload = new Image();
@@ -375,13 +382,17 @@ function SamApp(appConfig) {
         const decoded = preload.decode
           ? preload.decode().then(() => true, () => false)
           : new Promise(res => { preload.onload = () => res(true); preload.onerror = () => res(false); });
-        jobs.push(decoded.then(ok => ({ img, newSrc, ok })));
+        jobs.push(decoded.then(ok => ({ img, thumb, newSrc, ok })));
       });
       if (!jobs.length) return;
       Promise.all(jobs).then(results => {
-        results.forEach(({ img, newSrc, ok }) => {
+        results.forEach(({ img, thumb, newSrc, ok }) => {
           if (ok) img.src = newSrc;
           img.style.opacity = ok ? 1 : 0;
+          if (thumb) {
+            if (ok) { thumb.src = newSrc; thumb.style.opacity = 1; }
+            else thumb.style.opacity = 0;
+          }
         });
         hidePlaceholder();
       });
@@ -391,17 +402,29 @@ function SamApp(appConfig) {
 
     function loadAllLayers() {
       Object.values(layerEls).forEach(img => { if (img) img.style.opacity = 0; });
+      Object.values(thumbEls).forEach(img => { if (img) img.style.opacity = 0; });
       placeholder.classList.remove("hidden");
       const promises = config.layers.map(l => {
         const skus = getSKUs();
         const sku  = skus[l.key];
         const img  = layerEls[l.key];
+        const thumb = thumbEls[l.key];
         if (!img || !sku) return Promise.resolve();
         return new Promise(resolve => {
           img.style.opacity = 0;
-          img.src = `${config.assetBase}/${layerFolderMap[l.key]}/${sku}.png`;
-          img.onload  = () => { img.style.opacity = 1; resolve(); };
-          img.onerror = () => { img.style.opacity = 0; resolve(); };
+          const url = `${config.assetBase}/${layerFolderMap[l.key]}/${sku}.png`;
+          img.src = url;
+          if (thumb) thumb.src = url;
+          img.onload  = () => {
+            img.style.opacity = 1;
+            if (thumb) thumb.style.opacity = 1;
+            resolve();
+          };
+          img.onerror = () => {
+            img.style.opacity = 0;
+            if (thumb) thumb.style.opacity = 0;
+            resolve();
+          };
         });
       });
       Promise.all(promises).then(() => {
@@ -627,9 +650,75 @@ function SamApp(appConfig) {
       });
     }
 
+    // ── Sticky summary bar ──
+    // Build a one-line summary of the current selections for the bottom bar.
+    // Order and wording mirror the reference: exterior · door · panel · interior · accessories.
+    function buildSummaryText() {
+      const parts = [];
+      const ext = exteriorPalette.find(c => c.code === state.exterior);
+      if (ext) parts.push(`${ext.name} exterior`);
+      parts.push(state.door === "LT" ? "Left-handed door" : "Right-handed door");
+      const panel = config.panels.find(p => p.code === state.panel);
+      if (panel) {
+        const lbl = panel.label || "";
+        parts.push(/\bback\b/i.test(lbl) ? lbl : `${lbl} back`);
+      }
+      const intP = interiorPalette.find(c => c.code === state.interior);
+      if (intP) parts.push(`${intP.name} interior`);
+      if (config.accessories) {
+        config.accessories.items.forEach(a => {
+          if (!state.accessories[a.code]) return;
+          const code = state.accessoryColours[a.code];
+          const c = (a.colours || []).find(x => x.code === code);
+          const colourName = c ? c.name : "";
+          if (a === deskItem) {
+            // Standard Flex Desk → "White laminate desk" / "Black laminate desk"
+            parts.push(colourName ? `${colourName} laminate desk` : "Laminate desk");
+          } else if (colourName) {
+            parts.push(`${a.label} (${colourName})`);
+          } else {
+            parts.push(a.label);
+          }
+        });
+      }
+      return parts.join(" · ");
+    }
+
+    function updateSummary() {
+      const el = root.querySelector("#summary-config");
+      if (el) el.textContent = buildSummaryText();
+    }
+
+    // Single delegated listener: any interactive change in the configurator
+    // triggers a summary refresh (deferred so per-handler state mutations run
+    // first).
+    root.addEventListener("click", e => {
+      if (e.target.closest(".swatch, .acc-swatch, .door-btn, .panel-btn, .acc-toggle")) {
+        setTimeout(updateSummary, 0);
+      }
+    });
+
+    // Reset → re-render this product with default state.
+    const resetBtn = root.querySelector("#btn-reset");
+    if (resetBtn) resetBtn.addEventListener("click", () => switchTo(config.key));
+
+    // Quote → stub for now; logs the SKU set + opens a mailto so the user has
+    // a working action without a backend wired up. Replace with a real form
+    // submission when the quote pipeline exists.
+    const quoteBtn = root.querySelector("#btn-quote");
+    if (quoteBtn) quoteBtn.addEventListener("click", () => {
+      const summary = buildSummaryText();
+      const skus = getSKUs();
+      console.log("[quote] config:", { product: config.title, summary, skus });
+      const subject = encodeURIComponent(`Quote request: ${config.title}`);
+      const body = encodeURIComponent(`Selected configuration:\n${summary}\n\nSKUs:\n${JSON.stringify(skus, null, 2)}`);
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    });
+
     // ── Init ──
     loadAllLayers();
     tintAccessorySwatchBorders();
+    updateSummary();
 
     /* ==============================================================
        HTML BUILDER
@@ -694,7 +783,7 @@ function SamApp(appConfig) {
             <h2 class="text-lg font-bold" style="color:#0a2240">Setup</h2>
             <span class="section-chevron text-gray-400 transition-transform" style="transform:rotate(180deg)">${ICON_CHEVRON_DOWN}</span>
           </button>
-          <div class="section-body space-y-3 pt-2">
+          <div class="section-body space-y-4 pt-2">
 
             <!-- Door Direction -->
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="door">
@@ -745,7 +834,7 @@ function SamApp(appConfig) {
             <h2 class="text-lg font-bold" style="color:#0a2240">Color and materials</h2>
             <span class="section-chevron text-gray-400 transition-transform" style="transform:rotate(180deg)">${ICON_CHEVRON_DOWN}</span>
           </button>
-          <div class="section-body space-y-3 pt-2">
+          <div class="section-body space-y-4 pt-2">
 
             <!-- Exterior Colour -->
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="exterior">
@@ -789,7 +878,7 @@ function SamApp(appConfig) {
             <h2 class="text-lg font-bold" style="color:#0a2240">Accessories</h2>
             <span class="section-chevron text-gray-400 transition-transform" style="transform:rotate(180deg)">${ICON_CHEVRON_DOWN}</span>
           </button>
-          <div class="section-body space-y-3 pt-2">
+          <div class="section-body space-y-4 pt-2">
             ${optionalAccessories.map(a => `
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden">
               <button data-acc="${a.code}" class="acc-toggle w-full flex items-center justify-between px-4 py-3 text-left transition hover:bg-gray-50">
@@ -826,6 +915,35 @@ function SamApp(appConfig) {
       &copy; 2026 Koplus. All rights reserved.
     </div>
   </footer>
+
+  <!-- Spacer so page content can scroll clear of the fixed summary bar below. -->
+  <div class="h-24"></div>
+
+  <!-- Sticky bottom configuration summary bar -->
+  <div id="cfg-summary-bar" class="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white" style="box-shadow:0 -2px 12px rgba(0,0,0,0.06)">
+    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
+      <!-- Left: live product thumbnail + product / live summary -->
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div id="summary-thumb" class="hidden sm:block relative aspect-[4/3] h-12 rounded-md overflow-hidden shrink-0 ring-1 ring-gray-200 bg-gradient-to-b from-gray-50 to-white">
+          ${config.layers.map(l =>
+            `<img id="thumb-${l.key}" class="pod-layer absolute inset-0 h-full w-full object-contain" style="z-index:${l.zIndex}; opacity:0" src="" alt="">`
+          ).join("")}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div id="summary-product" class="text-sm font-semibold text-gray-900 truncate">${config.title}</div>
+          <div id="summary-config" class="text-xs text-gray-500 truncate"></div>
+        </div>
+      </div>
+      <!-- Right: secondary + primary actions -->
+      <button id="btn-reset" type="button" class="shrink-0 text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-2 transition">Reset</button>
+      <button id="btn-quote" type="button" class="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">
+        Request a quote
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
 
   <style>
     .swatch, .acc-swatch { cursor:pointer; transition: transform 0.15s ease; }
