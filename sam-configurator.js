@@ -33,6 +33,15 @@ const LOCAL_SWATCH_IMAGES = {
   GBN: "assets/access-swatches/GBN.jpg"
 };
 
+// Local order overrides for a palette, by palette key. Codes listed here are
+// reordered to this sequence; any codes not listed keep their API order at the
+// end. Used to mirror the canonical Gabriel Medley swatch order from
+// koplus.com/en/accessories/discuter-system (Slate Grey, Mocha Brown, Mustard
+// Yellow, Scarlet Red, Fuchsia Purple, Indigo Blue, Sky Teal, Matcha Green).
+const LOCAL_PALETTE_ORDER = {
+  accUpholstery: ["GDG", "GBN", "GYE", "GRD", "GPP", "GDB", "GLB", "GGR"]
+};
+
 // Convert a palette object into a swatch array.
 //   codes        — whitelist: only these codes (in given order)
 //   excludeCodes — blacklist: all codes except these
@@ -92,6 +101,19 @@ function buildPalettesFromApi(colors) {
     };
     if (LOCAL_SWATCH_IMAGES[c.code]) entry.swatch = LOCAL_SWATCH_IMAGES[c.code];
     out[paletteKey][c.code] = entry;
+  }
+  // Apply any local order overrides (e.g. accUpholstery → koplus.com sequence).
+  // Object key insertion order drives getPalette()'s default order.
+  for (const key in LOCAL_PALETTE_ORDER) {
+    if (!out[key]) continue;
+    const reordered = {};
+    LOCAL_PALETTE_ORDER[key].forEach(code => {
+      if (out[key][code]) reordered[code] = out[key][code];
+    });
+    Object.keys(out[key]).forEach(code => {
+      if (!(code in reordered)) reordered[code] = out[key][code];
+    });
+    out[key] = reordered;
   }
   return out;
 }
