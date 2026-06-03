@@ -797,7 +797,7 @@ function SamApp(appConfig) {
               </button>
               ${a.colours && a.colours.length ? `
               <div class="cfg-row-body acc-colours px-4" data-acc-colours="${a.code}">
-                <div class="text-xs text-gray-500 mb-2">Colour: <em class="acc-colour-label">${(a.colours.find(c => c.code === (a.defaultColour || a.colours[0].code)) || a.colours[0]).name}</em></div>
+                <div class="text-xs text-gray-500 mb-2">Colour: <span class="acc-colour-label">${(a.colours.find(c => c.code === (a.defaultColour || a.colours[0].code)) || a.colours[0]).name}</span></div>
                 <div class="flex flex-wrap gap-2.5">
                   ${a.colours.map(c => {
                     const on = c.code === (a.defaultColour || a.colours[0].code) ? " on" : "";
