@@ -313,20 +313,28 @@ function SamApp(appConfig) {
         const row = header.closest(".cfg-row");
         const body = row.querySelector(".cfg-row-body");
         const chevron = header.querySelector(".chevron");
-        const isOpen = !body.classList.contains("hidden");
+        const isOpen = body.classList.contains("open");
 
         if (isOpen) {
-          body.classList.add("hidden");
+          body.classList.remove("open");
           if (chevron) chevron.style.transform = "";
           row.classList.remove("ring-2", "ring-[#061629]");
           row.classList.add("ring-1", "ring-gray-200");
         } else {
-          body.classList.remove("hidden");
+          body.classList.add("open");
           if (chevron) chevron.style.transform = "rotate(180deg)";
           row.classList.remove("ring-1", "ring-gray-200");
           row.classList.add("ring-2", "ring-[#061629]");
         }
       });
+    });
+
+    // First click inside a row's body counts as the user picking an option in
+    // that row — flips the header checkmark from gray to dark navy.
+    root.querySelectorAll(".cfg-row").forEach(row => {
+      const body = row.querySelector(".cfg-row-body");
+      if (!body) return;
+      body.addEventListener("click", () => row.classList.add("touched"));
     });
 
     // Section accordions
@@ -567,24 +575,28 @@ function SamApp(appConfig) {
           const isOn = !state.accessories[acc];
           state.accessories[acc] = isOn;
 
-          // Update button UI
+          // Toggle wrapper border (matches the Exterior row pattern) + body open.
+          const wrapper = btn.closest(".cfg-row");
           const check = btn.querySelector(".acc-check");
           const label = btn.querySelector(".acc-status");
-          if (isOn) {
-            btn.classList.remove("ring-1", "ring-gray-200");
-            btn.classList.add("ring-2", "ring-[#061629]", "bg-blue-50");
-            if (check) check.classList.remove("hidden");
-            if (label) label.textContent = "Added";
-          } else {
-            btn.classList.remove("ring-2", "ring-[#061629]", "bg-blue-50");
-            btn.classList.add("ring-1", "ring-gray-200");
-            if (check) check.classList.add("hidden");
-            if (label) label.textContent = "Add +";
-          }
-
-          // Show/hide colour picker for this accessory
           const coloursEl = root.querySelector(`[data-acc-colours="${acc}"]`);
-          if (coloursEl) coloursEl.classList.toggle("hidden", !isOn);
+          if (isOn) {
+            if (wrapper) {
+              wrapper.classList.remove("ring-1", "ring-gray-200");
+              wrapper.classList.add("ring-2", "ring-[#061629]");
+            }
+            if (check) check.classList.remove("hidden");
+            if (label) { label.textContent = "Added"; label.classList.add("font-bold", "text-[#061629]"); }
+            if (coloursEl) coloursEl.classList.add("open");
+          } else {
+            if (wrapper) {
+              wrapper.classList.remove("ring-2", "ring-[#061629]");
+              wrapper.classList.add("ring-1", "ring-gray-200");
+            }
+            if (check) check.classList.add("hidden");
+            if (label) { label.textContent = "Add +"; label.classList.remove("font-bold", "text-[#061629]"); }
+            if (coloursEl) coloursEl.classList.remove("open");
+          }
 
           const item = config.accessories.items.find(a => a.code === acc);
           if (item && item.layerKey) loadLayer(item.layerKey);
@@ -624,7 +636,9 @@ function SamApp(appConfig) {
       return `
   <header class="border-b border-gray-200 px-6 py-4">
     <nav class="mx-auto flex max-w-7xl items-center justify-between">
-      <a href="/" class="text-xl font-bold">Koplus</a>
+      <a href="/" class="inline-flex items-center" aria-label="Koplus">
+        <img src="assets/koplus-logo.png" alt="Koplus" class="h-8 w-auto">
+      </a>
       <div class="flex gap-1 rounded-full bg-gray-100 p-1">
         ${products.map(p =>
           `<button onclick="_samSwitchTo('${p.key}')" class="rounded-full px-4 py-1.5 text-sm font-medium transition ${p.key === activeKey ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}">${p.label}</button>`
@@ -678,11 +692,9 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Door orientation</div>
                   <div class="row-value text-xs text-gray-500">${doorName}</div>
                 </div>
-                <div class="flex items-center gap-2 text-[#061629] text-xs font-medium">
-                  Included ${ICON_CHECK}
-                </div>
+                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
-              <div class="cfg-row-body hidden px-4 pb-4">
+              <div class="cfg-row-body px-4">
                 <div class="flex gap-3 pt-2">
                   <button data-code="LT" data-name="Left Handed" class="door-btn flex-1 rounded-lg ring-2 ring-[#061629] bg-blue-50 px-4 py-3 text-sm font-medium text-center transition">Left Handed</button>
                   <button data-code="RT" data-name="Right Handed" class="door-btn flex-1 rounded-lg ring-1 ring-gray-200 px-4 py-3 text-sm font-medium text-gray-600 text-center transition hover:ring-gray-400">Right Handed</button>
@@ -697,11 +709,9 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Back panel</div>
                   <div class="row-value text-xs text-gray-500">${panelName}</div>
                 </div>
-                <div class="flex items-center gap-2 text-[#061629] text-xs font-medium">
-                  Included ${ICON_CHECK}
-                </div>
+                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
-              <div class="cfg-row-body hidden px-4 pb-4">
+              <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2 pt-2">
                   ${config.panels.map((p, i) => {
                     const iconSvg = PANEL_ICONS[p.icon] || PANEL_ICONS.glass;
@@ -733,11 +743,9 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Exterior color</div>
                   <div class="row-value text-xs text-gray-500">${extName}</div>
                 </div>
-                <div class="flex items-center gap-2 text-[#061629] text-xs font-medium">
-                  Included ${ICON_CHECK}
-                </div>
+                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
-              <div class="cfg-row-body hidden px-4 pb-4">
+              <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2.5 pt-2">
                   ${renderSwatches(exteriorPalette, state.exterior)}
                 </div>
@@ -751,11 +759,9 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Interior PET color</div>
                   <div class="row-value text-xs text-gray-500">${intName}</div>
                 </div>
-                <div class="flex items-center gap-2 text-[#061629] text-xs font-medium">
-                  Included ${ICON_CHECK}
-                </div>
+                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
-              <div class="cfg-row-body hidden px-4 pb-4">
+              <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2.5 pt-2">
                   ${renderSwatches(interiorPalette, "BWH")}
                 </div>
@@ -774,8 +780,8 @@ function SamApp(appConfig) {
           </button>
           <div class="section-body space-y-3 pt-2">
             ${optionalAccessories.map(a => `
-            <div class="space-y-2">
-              <button data-acc="${a.code}" class="acc-toggle w-full flex items-center justify-between rounded-xl ring-1 ring-gray-200 px-4 py-3 text-left transition hover:ring-gray-400">
+            <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden">
+              <button data-acc="${a.code}" class="acc-toggle w-full flex items-center justify-between px-4 py-3 text-left transition hover:bg-gray-50">
                 <div class="text-sm font-semibold text-gray-900">${a.label}</div>
                 <div class="flex items-center gap-2 text-xs font-medium text-gray-500">
                   <span class="acc-status">Add +</span>
@@ -783,7 +789,7 @@ function SamApp(appConfig) {
                 </div>
               </button>
               ${a.colours && a.colours.length ? `
-              <div class="acc-colours hidden pl-4 pt-1" data-acc-colours="${a.code}">
+              <div class="cfg-row-body acc-colours px-4" data-acc-colours="${a.code}">
                 <div class="text-xs text-gray-500 mb-2">Colour: <em class="acc-colour-label">${(a.colours.find(c => c.code === (a.defaultColour || a.colours[0].code)) || a.colours[0]).name}</em></div>
                 <div class="flex flex-wrap gap-2.5">
                   ${a.colours.map(c => {
@@ -834,10 +840,21 @@ function SamApp(appConfig) {
       border-radius: 50%;
     }
     .cfg-row-header:hover { background: #fafafa; }
-    .cfg-row-body { animation: slideDown 0.25s ease; }
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-4px); }
-      to { opacity: 1; transform: translateY(0); }
+    /* Smooth expand/collapse for option-card bodies. Default collapsed: zero
+       max-height + zero vertical padding; .open transitions to full height. */
+    .cfg-row-body {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      transition: max-height .3s ease, opacity .25s ease, padding-top .3s ease, padding-bottom .3s ease;
+    }
+    .cfg-row-body.open {
+      max-height: 800px;
+      opacity: 1;
+      padding-top: .5rem;
+      padding-bottom: 1rem;
     }
     .cfg-section + .cfg-section { border-top: 1px solid #f3f4f6; padding-top: 1.25rem; }
     .section-chevron svg { transition: transform 0.2s ease; }
@@ -845,6 +862,10 @@ function SamApp(appConfig) {
     /* Source renders come in a touch dark — lift the composited product.
        Stop-gap until/unless Koplus re-exports brighter layers. Tune here. */
     .pod-layer { filter: brightness(1.15); }
+    /* Row-header checkmark: gray until the user picks an option in that row,
+       then dark navy. The .touched class is added on the first body click. */
+    .row-check { color: #aaaaaa; transition: color .15s ease; }
+    .cfg-row.touched .row-check { color: #061629; }
   </style>`;
     }
 
@@ -876,14 +897,14 @@ function SamApp(appConfig) {
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="desk">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Desk surface</div>
+                  <div class="text-sm font-semibold text-gray-900">Flex Desk</div>
                   <div class="row-value text-xs text-gray-500">${deskColourName(active)}</div>
                 </div>
                 <div class="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
                   Auto ${ICON_LOCK}
                 </div>
               </button>
-              <div class="cfg-row-body hidden px-4 pb-4">
+              <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2.5 pt-2">
                   ${swatches}
                 </div>
