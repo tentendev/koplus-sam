@@ -702,18 +702,8 @@ function SamApp(appConfig) {
     const resetBtn = root.querySelector("#btn-reset");
     if (resetBtn) resetBtn.addEventListener("click", () => switchTo(config.key));
 
-    // Quote → stub for now; logs the SKU set + opens a mailto so the user has
-    // a working action without a backend wired up. Replace with a real form
-    // submission when the quote pipeline exists.
-    const quoteBtn = root.querySelector("#btn-quote");
-    if (quoteBtn) quoteBtn.addEventListener("click", () => {
-      const summary = buildSummaryText();
-      const skus = getSKUs();
-      console.log("[quote] config:", { product: config.title, summary, skus });
-      const subject = encodeURIComponent(`Quote request: ${config.title}`);
-      const body = encodeURIComponent(`Selected configuration:\n${summary}\n\nSKUs:\n${JSON.stringify(skus, null, 2)}`);
-      window.location.href = `mailto:?subject=${subject}&body=${body}`;
-    });
+    // Quote → intentionally inert for now. Wire up to the real submission flow
+    // (modal form + backend / Resend / HubSpot, etc.) once it's defined.
 
     // ── Init ──
     loadAllLayers();
