@@ -463,16 +463,23 @@ function SamApp(appConfig) {
       }
     }
 
+    // Sample each fabric swatch's average colour off-screen and use it as the
+    // button's border so the ring blends with the texture. The swatch URL is
+    // read from the inline background-image; we load a fresh Image() for
+    // sampling — the browser dedupes the request via cache.
     function tintAccessorySwatchBorders() {
-      root.querySelectorAll(".acc-swatch > img").forEach(img => {
-        const apply = () => {
+      root.querySelectorAll(".acc-swatch").forEach(btn => {
+        const m = btn.style.backgroundImage.match(/url\(["']?([^"')]+)/);
+        if (!m) return;
+        const img = new Image();
+        img.onload = () => {
           const colour = averageImageColour(img);
-          if (colour && img.parentElement) img.parentElement.style.borderColor = colour;
+          if (colour) btn.style.borderColor = colour;
         };
-        if (img.complete && img.naturalWidth) apply();
-        else img.addEventListener("load", apply, { once: true });
+        img.src = m[1];
       });
     }
+
 
     // ── Events: Swatches ──
     function setupSwatchRow(rowEl, stateKey, layerKey) {
@@ -796,7 +803,7 @@ function SamApp(appConfig) {
                     const on = c.code === (a.defaultColour || a.colours[0].code) ? " on" : "";
                     const unavailable = c.unavailable ? " unavailable" : "";
                     if (c.swatch && !c.unavailable) {
-                      return `<button data-code="${c.code}" data-name="${c.name}" class="acc-swatch${on}${unavailable} h-8 w-8 rounded-full border-2 transition overflow-hidden" style="border-color:${c.border || c.bg}"><img src="${c.swatch}" alt="${c.name}" class="h-full w-full object-cover rounded-full"></button>`;
+                      return `<button data-code="${c.code}" data-name="${c.name}" title="${c.name}" aria-label="${c.name}" class="acc-swatch${on}${unavailable} h-8 w-8 rounded-full border-2 transition" style="border-color:${c.border || c.bg};background-image:url('${c.swatch}')"></button>`;
                     }
                     return `<button data-code="${c.code}" data-name="${c.name}" class="acc-swatch${on}${unavailable} h-8 w-8 rounded-full border-2 transition" style="background:${c.bg};border-color:${c.border || c.bg}"></button>`;
                   }).join("")}
@@ -820,6 +827,9 @@ function SamApp(appConfig) {
     .swatch, .acc-swatch { cursor:pointer; transition: transform 0.15s ease; }
     .swatch:hover, .acc-swatch:hover { transform: scale(1.08); }
     .swatch.on, .acc-swatch.on { box-shadow:0 0 0 2px #fff, 0 0 0 3px #061629; }
+    /* Fabric swatch render: zoom the texture in place by sizing the background
+       larger than the swatch and centering it. Same effect koplus.com uses. */
+    .acc-swatch { background-size: 90px; background-position: 50%; background-repeat: no-repeat; }
     .desk-swatch { display:inline-block; cursor:not-allowed; }
     .desk-swatch.on { box-shadow:0 0 0 2px #fff, 0 0 0 3px #061629; }
     .desk-swatch:not(.on) { opacity:.3; }
@@ -831,7 +841,7 @@ function SamApp(appConfig) {
       position: relative;
       overflow: hidden;
     }
-    .swatch.unavailable img, .acc-swatch.unavailable img { display: none; }
+    .swatch.unavailable img { display: none; }
     .swatch.unavailable::after, .acc-swatch.unavailable::after {
       content: "";
       position: absolute;
