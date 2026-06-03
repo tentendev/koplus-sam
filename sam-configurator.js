@@ -68,7 +68,6 @@ PANEL_ICONS["2wall"]  = PANEL_ICONS.wall;
 /* ================================================================
    SVG ICONS
    ================================================================ */
-const ICON_CHECK = '<svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
 const ICON_CHEVRON_DOWN = '<svg class="h-5 w-5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7"/></svg>';
 const ICON_LOCK = '<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path stroke-linecap="round" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
@@ -329,14 +328,6 @@ function SamApp(appConfig) {
           row.classList.add("ring-2", "ring-[#061629]");
         }
       });
-    });
-
-    // First click inside a row's body counts as the user picking an option in
-    // that row — flips the header checkmark from gray to dark navy.
-    root.querySelectorAll(".cfg-row").forEach(row => {
-      const body = row.querySelector(".cfg-row-body");
-      if (!body) return;
-      body.addEventListener("click", () => row.classList.add("touched"));
     });
 
     // Section accordions
@@ -607,23 +598,20 @@ function SamApp(appConfig) {
 
           // Toggle wrapper border (matches the Exterior row pattern) + body open.
           const wrapper = btn.closest(".cfg-row");
-          const check = btn.querySelector(".acc-check");
           const label = btn.querySelector(".acc-status");
           const coloursEl = root.querySelector(`[data-acc-colours="${acc}"]`);
           if (isOn) {
             if (wrapper) {
               wrapper.classList.remove("ring-1", "ring-gray-200");
-              wrapper.classList.add("ring-2", "ring-[#061629]");
+              wrapper.classList.add("ring-2", "ring-[#061629]", "bg-blue-50");
             }
-            if (check) check.classList.remove("hidden");
             if (label) { label.textContent = "Added"; label.classList.add("font-bold", "text-[#061629]"); }
             if (coloursEl) coloursEl.classList.add("open");
           } else {
             if (wrapper) {
-              wrapper.classList.remove("ring-2", "ring-[#061629]");
+              wrapper.classList.remove("ring-2", "ring-[#061629]", "bg-blue-50");
               wrapper.classList.add("ring-1", "ring-gray-200");
             }
-            if (check) check.classList.add("hidden");
             if (label) { label.textContent = "Add +"; label.classList.remove("font-bold", "text-[#061629]"); }
             if (coloursEl) coloursEl.classList.remove("open");
           }
@@ -782,7 +770,6 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Door Orientation</div>
                   <div class="row-value text-xs text-gray-500">${doorName}</div>
                 </div>
-                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
               <div class="cfg-row-body px-4">
                 <div class="flex gap-3 pt-2">
@@ -799,7 +786,6 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Back Panel</div>
                   <div class="row-value text-xs text-gray-500">${panelName}</div>
                 </div>
-                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
               <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2 pt-2">
@@ -833,7 +819,6 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Exterior Colour</div>
                   <div class="row-value text-xs text-gray-500">${extName}</div>
                 </div>
-                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
               <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2.5 pt-2">
@@ -849,7 +834,6 @@ function SamApp(appConfig) {
                   <div class="text-sm font-semibold text-gray-900">Interior PET Colour</div>
                   <div class="row-value text-xs text-gray-500">${intName}</div>
                 </div>
-                <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
               </button>
               <div class="cfg-row-body px-4">
                 <div class="flex flex-wrap gap-2.5 pt-2">
@@ -875,7 +859,6 @@ function SamApp(appConfig) {
                 <div class="text-sm font-semibold text-gray-900">${a.label}</div>
                 <div class="flex items-center gap-2 text-xs font-medium text-gray-500">
                   <span class="acc-status">Add +</span>
-                  <span class="acc-check hidden text-[#061629]">${ICON_CHECK}</span>
                 </div>
               </button>
               ${a.colours && a.colours.length ? `
@@ -984,10 +967,6 @@ function SamApp(appConfig) {
     /* Source renders come in a touch dark — lift the composited product.
        Stop-gap until/unless Koplus re-exports brighter layers. Tune here. */
     .pod-layer { filter: brightness(1.15); }
-    /* Row-header checkmark: gray until the user picks an option in that row,
-       then dark navy. The .touched class is added on the first body click. */
-    .row-check { color: #aaaaaa; transition: color .15s ease; }
-    .cfg-row.touched .row-check { color: #061629; }
   </style>`;
     }
 
