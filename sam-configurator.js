@@ -779,7 +779,7 @@ function SamApp(appConfig) {
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="door">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Door orientation</div>
+                  <div class="text-sm font-semibold text-gray-900">Door Orientation</div>
                   <div class="row-value text-xs text-gray-500">${doorName}</div>
                 </div>
                 <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
@@ -796,7 +796,7 @@ function SamApp(appConfig) {
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="backpanel">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Back panel</div>
+                  <div class="text-sm font-semibold text-gray-900">Back Panel</div>
                   <div class="row-value text-xs text-gray-500">${panelName}</div>
                 </div>
                 <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
@@ -821,7 +821,7 @@ function SamApp(appConfig) {
         <!-- ═══ Section: Color and Materials ═══ -->
         <div class="cfg-section">
           <button class="section-toggle w-full flex items-center justify-between py-2">
-            <h2 class="text-lg font-bold" style="color:#0a2240">Color and materials</h2>
+            <h2 class="text-lg font-bold" style="color:#0a2240">Colour Option</h2>
             <span class="section-chevron text-gray-400 transition-transform" style="transform:rotate(180deg)">${ICON_CHEVRON_DOWN}</span>
           </button>
           <div class="section-body space-y-4 pt-2">
@@ -830,7 +830,7 @@ function SamApp(appConfig) {
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="exterior">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Exterior color</div>
+                  <div class="text-sm font-semibold text-gray-900">Exterior Colour</div>
                   <div class="row-value text-xs text-gray-500">${extName}</div>
                 </div>
                 <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
@@ -846,7 +846,7 @@ function SamApp(appConfig) {
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="interior">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Interior PET color</div>
+                  <div class="text-sm font-semibold text-gray-900">Interior PET Colour</div>
                   <div class="row-value text-xs text-gray-500">${intName}</div>
                 </div>
                 <span class="row-check inline-flex items-center">${ICON_CHECK}</span>
@@ -865,7 +865,7 @@ function SamApp(appConfig) {
         <!-- ═══ Section: Accessories ═══ -->
         <div class="cfg-section">
           <button class="section-toggle w-full flex items-center justify-between py-2">
-            <h2 class="text-lg font-bold" style="color:#0a2240">Accessories</h2>
+            <h2 class="text-lg font-bold" style="color:#0a2240">Accessory</h2>
             <span class="section-chevron text-gray-400 transition-transform" style="transform:rotate(180deg)">${ICON_CHEVRON_DOWN}</span>
           </button>
           <div class="section-body space-y-4 pt-2">
@@ -1019,7 +1019,7 @@ function SamApp(appConfig) {
             <div class="cfg-row rounded-xl ring-1 ring-gray-200 overflow-hidden" data-row="desk">
               <button class="cfg-row-header w-full flex items-center justify-between px-4 py-3 text-left">
                 <div>
-                  <div class="text-sm font-semibold text-gray-900">Flex Desk</div>
+                  <div class="text-sm font-semibold text-gray-900">Tabletop Colour</div>
                   <div class="row-value text-xs text-gray-500">${deskColourName(active)}</div>
                 </div>
                 <div class="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
