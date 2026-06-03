@@ -677,10 +677,12 @@ function SamApp(appConfig) {
           ).join("\n          ")}
         </div>
 
-        <!-- Title -->
+        <!-- Title — sizes / weights / spacing matched to koplus.com/en/products/solo
+             (40px regular @ desktop, 32px @ tablet, 25px @ mobile; line-height 1.2;
+             20px gap to subtitle; subtitle = 16px / weight 300 / line-height 22px). -->
         <div>
-          <h1 class="text-2xl md:text-3xl font-bold" style="color:#0a2240">${config.title}</h1>
-          <p class="text-sm text-gray-500 mt-1">${subtitle}</p>
+          <h1 class="font-['Cal_Sans'] text-[25px] md:text-[32px] lg:text-[40px] font-normal leading-[1.2] mb-5" style="color:#0a2240">${config.title}</h1>
+          <p class="font-['Cal_Sans'] text-base font-light leading-[22px]" style="color:#003764">${subtitle}</p>
         </div>
 
         <!-- Configure heading -->
