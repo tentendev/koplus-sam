@@ -642,15 +642,10 @@ function SamApp(appConfig) {
 
       return `
   <header class="border-b border-gray-200 px-6 py-4">
-    <nav class="mx-auto flex max-w-7xl items-center justify-between">
+    <nav class="mx-auto flex max-w-7xl items-center">
       <a href="/" class="inline-flex items-center" aria-label="Koplus">
         <img src="assets/koplus-logo.png" alt="Koplus" class="h-8 w-auto">
       </a>
-      <div class="flex gap-1 rounded-full bg-gray-100 p-1">
-        ${products.map(p =>
-          `<button onclick="_samSwitchTo('${p.key}')" class="rounded-full px-4 py-1.5 text-sm font-medium transition ${p.key === activeKey ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}">${p.label}</button>`
-        ).join("\n        ")}
-      </div>
     </nav>
   </header>
 
@@ -675,6 +670,13 @@ function SamApp(appConfig) {
       <!-- RIGHT — Config panel -->
       <div class="lg:w-2/5 flex flex-col gap-6">
 
+        <!-- Product selector (above title, left-aligned) -->
+        <div class="flex gap-1 rounded-full bg-gray-100 p-1 self-start">
+          ${products.map(p =>
+            `<button onclick="_samSwitchTo('${p.key}')" class="rounded-full px-4 py-1.5 text-sm font-medium transition ${p.key === activeKey ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}">${p.label}</button>`
+          ).join("\n          ")}
+        </div>
+
         <!-- Title -->
         <div>
           <h1 class="text-2xl md:text-3xl font-bold" style="color:#0a2240">${config.title}</h1>
@@ -682,7 +684,7 @@ function SamApp(appConfig) {
         </div>
 
         <!-- Configure heading -->
-        <div class="text-center text-xs font-semibold uppercase tracking-wider text-gray-400 border-b-2 border-[#061629] pb-2">Configure</div>
+        <div class="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b-2 border-[#061629] pb-2">Configure</div>
 
         <!-- ═══ Section: Setup ═══ -->
         <div class="cfg-section">
