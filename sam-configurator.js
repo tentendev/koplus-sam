@@ -747,7 +747,7 @@ function SamApp(appConfig) {
         <!-- Series name — aligns with the top edge of the product image on the left. -->
         <div>
           <h1 class="font-['Cal_Sans'] text-[40px] md:text-[52px] lg:text-[64px] font-normal leading-[1.05]" style="color:#0a2240">SAM</h1>
-          <p class="font-['Noto_Sans'] text-base md:text-lg font-light leading-snug mt-1.5" style="color:#5b6b7b">Sustainable Acoustic Modular Booth</p>
+          <p class="font-['Noto_Sans'] text-base font-light leading-snug mt-1.5" style="color:#5b6b7b">Sustainable Acoustic Modular Booth</p>
         </div>
 
         <!-- Product title — sits directly below the series tagline and updates with the
@@ -763,7 +763,7 @@ function SamApp(appConfig) {
         </div>
 
         <!-- Product description (API-driven subtitle) — Noto Sans Light to match the tagline. -->
-        <p class="font-['Noto_Sans'] text-base font-light leading-[22px]" style="color:#5b6b7b">${subtitle}</p>
+        <p class="font-['Noto_Sans'] text-lg font-light leading-[22px]" style="color:#5b6b7b">${subtitle}</p>
 
         <!-- Divider (replaces the former "Configure" heading). -->
         <div class="border-b border-gray-300"></div>
