@@ -640,35 +640,39 @@ function SamApp(appConfig) {
 
     // ── Sticky summary bar ──
     // Build a one-line summary of the current selections for the bottom bar.
-    // Order and wording mirror the reference: exterior · door · panel · interior · accessories.
+    // Order mirrors the right-side selector top-to-bottom:
+    // Door Orientation · Back Panel · Exterior Colour · Tabletop Colour · Interior PET Colour · Accessory.
     function buildSummaryText() {
       const parts = [];
-      const ext = exteriorPalette.find(c => c.code === state.exterior);
-      if (ext) parts.push(`${ext.name} exterior`);
+      // Door Orientation
       parts.push(state.door === "LT" ? "Left-handed door" : "Right-handed door");
+      // Back Panel
       const panel = config.panels.find(p => p.code === state.panel);
       if (panel) {
         const lbl = panel.label || "";
         parts.push(/\bback\b/i.test(lbl) ? lbl : `${lbl} back`);
       }
+      // Exterior Colour
+      const ext = exteriorPalette.find(c => c.code === state.exterior);
+      if (ext) parts.push(`${ext.name} exterior`);
+      // Tabletop Colour (standard Flex Desk — Single only)
+      if (deskItem && state.accessories[deskItem.code]) {
+        const code = state.accessoryColours[deskItem.code];
+        const c = (deskItem.colours || []).find(x => x.code === code);
+        const colourName = c ? c.name : "";
+        parts.push(colourName ? `${colourName} laminate desk` : "Laminate desk");
+      }
+      // Interior PET Colour
       const intP = interiorPalette.find(c => c.code === state.interior);
       if (intP) parts.push(`${intP.name} interior`);
-      if (config.accessories) {
-        config.accessories.items.forEach(a => {
-          if (!state.accessories[a.code]) return;
-          const code = state.accessoryColours[a.code];
-          const c = (a.colours || []).find(x => x.code === code);
-          const colourName = c ? c.name : "";
-          if (a === deskItem) {
-            // Standard Flex Desk → "White laminate desk" / "Black laminate desk"
-            parts.push(colourName ? `${colourName} laminate desk` : "Laminate desk");
-          } else if (colourName) {
-            parts.push(`${a.label} (${colourName})`);
-          } else {
-            parts.push(a.label);
-          }
-        });
-      }
+      // Accessory (optional add-ons)
+      optionalAccessories.forEach(a => {
+        if (!state.accessories[a.code]) return;
+        const code = state.accessoryColours[a.code];
+        const c = (a.colours || []).find(x => x.code === code);
+        const colourName = c ? c.name : "";
+        parts.push(colourName ? `${a.label} (${colourName})` : a.label);
+      });
       return parts.join(" · ");
     }
 
@@ -706,6 +710,9 @@ function SamApp(appConfig) {
       const extName  = exteriorPalette[0].name;
       const intName  = "Blended White";
       const panelName = config.panels[0].label;
+      // The big "SAM" series heading already brands the page, so drop any leading
+      // "SAM " the CMS title carries — the product title reads e.g. "Large Acoustic Booth".
+      const productTitle = config.title.replace(/^SAM\s+/i, "");
 
       return `
   <header class="border-b border-gray-200 px-6 py-4">
@@ -737,23 +744,29 @@ function SamApp(appConfig) {
       <!-- RIGHT — Config panel -->
       <div class="lg:w-2/5 flex flex-col gap-6">
 
-        <!-- Product selector (above title, left-aligned) -->
-        <div class="flex gap-1 rounded-full bg-gray-100 p-1 self-start">
+        <!-- Series name — aligns with the top edge of the product image on the left. -->
+        <div>
+          <h1 class="font-['Cal_Sans'] text-[40px] md:text-[52px] lg:text-[64px] font-normal leading-[1.05]" style="color:#0a2240">SAM</h1>
+          <p class="font-['Noto_Sans'] text-base md:text-lg font-light leading-snug mt-1.5" style="color:#5b6b7b">Sustainable Acoustic Modular Booth</p>
+        </div>
+
+        <!-- Product title — sits directly below the series tagline and updates with the
+             selector. Title text is API-driven (config.title); per-size naming lives in CMS. -->
+        <h2 class="font-['Noto_Sans'] text-[22px] md:text-[26px] lg:text-[30px] font-medium leading-[1.2]" style="color:#0a2240">${productTitle}</h2>
+
+        <!-- Product selector (Single / Medium / Large) — compact pill with generous
+             per-option padding so each segment (incl. the selected one) reads spacious. -->
+        <div class="flex gap-1 rounded-full bg-gray-100 p-1.5 self-start">
           ${products.map(p =>
-            `<button onclick="_samSwitchTo('${p.key}')" class="rounded-full px-4 py-1.5 text-sm font-medium transition ${p.key === activeKey ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}">${p.label}</button>`
+            `<button onclick="_samSwitchTo('${p.key}')" class="rounded-full px-7 py-2 text-sm font-medium transition ${p.key === activeKey ? 'bg-[#061629] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'}">${p.label}</button>`
           ).join("\n          ")}
         </div>
 
-        <!-- Title — sizes / weights / spacing matched to koplus.com/en/products/solo
-             (40px regular @ desktop, 32px @ tablet, 25px @ mobile; line-height 1.2;
-             20px gap to subtitle; subtitle = 16px / weight 300 / line-height 22px). -->
-        <div>
-          <h1 class="font-['Cal_Sans'] text-[25px] md:text-[32px] lg:text-[40px] font-normal leading-[1.2] mb-5" style="color:#0a2240">${config.title}</h1>
-          <p class="font-['Cal_Sans'] text-base font-light leading-[22px]" style="color:#003764">${subtitle}</p>
-        </div>
+        <!-- Product description (API-driven subtitle) — Noto Sans Light to match the tagline. -->
+        <p class="font-['Noto_Sans'] text-base font-light leading-[22px]" style="color:#5b6b7b">${subtitle}</p>
 
-        <!-- Configure heading -->
-        <div class="text-left text-xs font-semibold uppercase tracking-wider text-gray-400 border-b-2 border-[#061629] pb-2">Configure</div>
+        <!-- Divider (replaces the former "Configure" heading). -->
+        <div class="border-b border-gray-300"></div>
 
         <!-- ═══ Section: Setup ═══ -->
         <div class="cfg-section">
@@ -894,7 +907,7 @@ function SamApp(appConfig) {
 
   <!-- Sticky bottom configuration summary bar -->
   <div id="cfg-summary-bar" class="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white" style="box-shadow:0 -2px 12px rgba(0,0,0,0.06)">
-    <div class="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
+    <div class="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 py-3 flex items-center gap-4">
       <!-- Left: live product thumbnail + product / live summary -->
       <div class="flex items-center gap-3 flex-1 min-w-0">
         <div id="summary-thumb" class="hidden sm:block relative aspect-[4/3] h-12 rounded-md overflow-hidden shrink-0 ring-1 ring-gray-200 bg-gradient-to-b from-gray-50 to-white">
@@ -903,13 +916,13 @@ function SamApp(appConfig) {
           ).join("")}
         </div>
         <div class="min-w-0 flex-1">
-          <div id="summary-product" class="text-sm font-semibold text-gray-900 truncate">${config.title}</div>
+          <div id="summary-product" class="text-sm font-semibold text-gray-900 truncate">SAM ${productTitle}</div>
           <div id="summary-config" class="text-xs text-gray-500 truncate"></div>
         </div>
       </div>
       <!-- Right: secondary + primary actions -->
-      <button id="btn-reset" type="button" class="shrink-0 text-sm font-medium text-gray-600 hover:text-gray-900 px-3 py-2 transition">Reset</button>
-      <button id="btn-quote" type="button" class="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">
+      <button id="btn-reset" type="button" class="shrink-0 text-sm font-medium text-gray-600 hover:text-gray-900 px-6 py-2 transition">Reset</button>
+      <button id="btn-quote" type="button" class="shrink-0 inline-flex items-center gap-2 px-8 py-2.5 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">
         Request a quote
         <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/>
