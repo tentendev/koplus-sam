@@ -215,6 +215,10 @@ function SamApp(appConfig) {
      ============================================================== */
   function renderConfigurator(config) {
     const subtitle = config.subtitle || "A self-contained individual studio space designed for private work in an open-plan workspace.";
+    // The big "SAM" series heading already brands the page, so drop any leading
+    // "SAM " the CMS title carries — the product title reads e.g. "Large Acoustic Booth".
+    // Declared here (not in buildHTML) so the quote handlers can reference it too.
+    const productTitle = config.title.replace(/^SAM\s+/i, "");
 
     // ── Resolved palettes for this product ──
     const exteriorPalette = getPalette(config.exteriorPaletteKey || "exterior");
@@ -694,8 +698,139 @@ function SamApp(appConfig) {
     const resetBtn = root.querySelector("#btn-reset");
     if (resetBtn) resetBtn.addEventListener("click", () => switchTo(config.key));
 
-    // Quote → intentionally inert for now. Wire up to the real submission flow
-    // (modal form + backend / Resend / HubSpot, etc.) once it's defined.
+    // ── Request-a-quote modal ──
+    const quoteModal   = root.querySelector("#quote-modal");
+    const quoteBtn     = root.querySelector("#btn-quote");
+    const summaryThumb = root.querySelector("#summary-thumb");
+    let quoteQty = 1;
+
+    // Mirror the live configuration into the modal's spec list.
+    function fillQuoteSpecs() {
+      const ext   = exteriorPalette.find(c => c.code === state.exterior);
+      const intP  = interiorPalette.find(c => c.code === state.interior);
+      const panel = config.panels.find(p => p.code === state.panel);
+      const set = (id, val) => { const el = root.querySelector(id); if (el) el.textContent = val || "—"; };
+      set("#qspec-frame",    ext && ext.name);
+      set("#qspec-exterior", ext && ext.name);
+      set("#qspec-interior", intP && intP.name);
+      set("#qspec-door",     state.door === "LT" ? "Left Handed" : "Right Handed");
+      set("#qspec-panel",    panel && panel.label);
+      set("#qspec-tabletop", deskItem ? deskColourName(state.accessoryColours[deskItem.code]) : "—");
+    }
+
+    // Structured configuration snapshot for the quote payload (mirrors the Payload
+    // quoteRequests.configuration group).
+    function quoteConfiguration() {
+      const ext   = exteriorPalette.find(c => c.code === state.exterior);
+      const intP  = interiorPalette.find(c => c.code === state.interior);
+      const panel = config.panels.find(p => p.code === state.panel);
+      const accNames = optionalAccessories
+        .filter(a => state.accessories[a.code])
+        .map(a => {
+          const c = (a.colours || []).find(x => x.code === state.accessoryColours[a.code]);
+          return c ? `${a.label} (${c.name})` : a.label;
+        });
+      return {
+        summary: buildSummaryText(),
+        door: state.door === "LT" ? "Left Handed" : "Right Handed",
+        backPanel: panel ? panel.label : "",
+        exterior: ext ? ext.name : "",
+        interior: intP ? intP.name : "",
+        tabletop: deskItem ? deskColourName(state.accessoryColours[deskItem.code]) : "",
+        accessories: accNames.join(", "),
+      };
+    }
+
+    function openQuote() {
+      fillQuoteSpecs();
+      // Reset to the form view (in case a prior submission left the success state).
+      const details = root.querySelector("#quote-details");
+      const form    = root.querySelector("#quote-form");
+      const success = root.querySelector("#quote-success");
+      if (details) details.classList.remove("hidden");
+      if (form) { form.classList.remove("hidden"); form.reset(); }
+      if (success) success.classList.add("hidden");
+      quoteQty = 1;
+      const qv = root.querySelector("#qty-value"); if (qv) qv.textContent = "1";
+      // Reuse the already-decoded summary-bar thumbnail for an instant preview
+      // (strip ids so we don't duplicate them in the document).
+      const qthumb = root.querySelector("#qmodal-thumb");
+      if (qthumb && summaryThumb) {
+        qthumb.innerHTML = summaryThumb.innerHTML;
+        qthumb.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+      }
+      quoteModal.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+    }
+    function closeQuote() {
+      quoteModal.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+
+    if (quoteBtn) quoteBtn.addEventListener("click", openQuote);
+    if (quoteModal) {
+      root.querySelector("#quote-close").addEventListener("click", closeQuote);
+      root.querySelector("#quote-backdrop").addEventListener("click", closeQuote);
+      root.querySelector("#quote-done").addEventListener("click", closeQuote);
+
+      // Quantity stepper
+      const qtyVal = root.querySelector("#qty-value");
+      root.querySelector("#qty-minus").addEventListener("click", () => { quoteQty = Math.max(1, quoteQty - 1); qtyVal.textContent = quoteQty; });
+      root.querySelector("#qty-plus").addEventListener("click",  () => { quoteQty += 1; qtyVal.textContent = quoteQty; });
+
+      // Submit — POST to the Payload `quoteRequests` collection.
+      const quoteForm = root.querySelector("#quote-form");
+      const submitBtn = quoteForm.querySelector('button[type="submit"]');
+      quoteForm.addEventListener("submit", async e => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        const payload = {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phone: data.phone,
+          country: data.country,
+          address: data.address || "",
+          company: data.company,
+          companyType: data.companyType,
+          companySize: data.companySize,
+          product: `SAM ${productTitle}`,
+          productSlug: config.key,
+          quantity: quoteQty,
+          configuration: quoteConfiguration(),
+        };
+        const originalLabel = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = "0.6";
+        submitBtn.textContent = "Submitting…";
+        try {
+          const res = await fetch(`${apiBase}/api/quoteRequests`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+          // Replace the summary + form with the in-modal success state.
+          root.querySelector("#quote-details").classList.add("hidden");
+          quoteForm.classList.add("hidden");
+          root.querySelector("#quote-success").classList.remove("hidden");
+          quoteForm.reset();
+          quoteQty = 1; qtyVal.textContent = 1;
+        } catch (err) {
+          console.error("[Quote submit] failed:", err);
+          alert("Sorry, something went wrong submitting your request. Please try again.");
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.style.opacity = "";
+          submitBtn.innerHTML = originalLabel;
+        }
+      });
+
+      // Esc closes the modal (replace any handler from a prior render — avoids leaks).
+      if (window._samQuoteEsc) document.removeEventListener("keydown", window._samQuoteEsc);
+      window._samQuoteEsc = (e) => { if (e.key === "Escape" && !quoteModal.classList.contains("hidden")) closeQuote(); };
+      document.addEventListener("keydown", window._samQuoteEsc);
+    }
 
     // ── Init ──
     loadAllLayers();
@@ -710,9 +845,6 @@ function SamApp(appConfig) {
       const extName  = exteriorPalette[0].name;
       const intName  = "Blended White";
       const panelName = config.panels[0].label;
-      // The big "SAM" series heading already brands the page, so drop any leading
-      // "SAM " the CMS title carries — the product title reads e.g. "Large Acoustic Booth".
-      const productTitle = config.title.replace(/^SAM\s+/i, "");
 
       return `
   <header class="border-b border-gray-200 px-6 py-4">
@@ -907,7 +1039,7 @@ function SamApp(appConfig) {
 
   <!-- Sticky bottom configuration summary bar -->
   <div id="cfg-summary-bar" class="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white" style="box-shadow:0 -2px 12px rgba(0,0,0,0.06)">
-    <div class="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12 py-3 flex items-center gap-4">
+    <div class="mx-auto max-w-7xl px-4 sm:px-8 lg:px-12 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4">
       <!-- Left: live product thumbnail + product / live summary -->
       <div class="flex items-center gap-3 flex-1 min-w-0">
         <div id="summary-thumb" class="hidden sm:block relative aspect-[4/3] h-12 rounded-md overflow-hidden shrink-0 ring-1 ring-gray-200 bg-gradient-to-b from-gray-50 to-white">
@@ -917,17 +1049,109 @@ function SamApp(appConfig) {
         </div>
         <div class="min-w-0 flex-1">
           <div id="summary-product" class="text-sm font-semibold text-gray-900 truncate">SAM ${productTitle}</div>
-          <div id="summary-config" class="text-xs text-gray-500 truncate"></div>
+          <div id="summary-config" class="hidden sm:block text-xs text-gray-500 truncate"></div>
         </div>
       </div>
       <!-- Right: secondary + primary actions -->
-      <button id="btn-reset" type="button" class="shrink-0 text-sm font-medium text-gray-600 hover:text-gray-900 px-6 py-2 transition">Reset</button>
-      <button id="btn-quote" type="button" class="shrink-0 inline-flex items-center gap-2 px-8 py-2.5 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">
+      <button id="btn-reset" type="button" class="shrink-0 text-sm font-medium text-gray-600 hover:text-gray-900 px-3 sm:px-6 py-2 transition">Reset</button>
+      <button id="btn-quote" type="button" class="shrink-0 inline-flex items-center gap-2 px-4 sm:px-8 py-2.5 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">
         Request a quote
         <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/>
         </svg>
       </button>
+    </div>
+  </div>
+
+  <!-- ═══ Request-a-quote modal — opens from the summary-bar CTA ═══ -->
+  <div id="quote-modal" class="fixed inset-0 z-50 hidden">
+    <div id="quote-backdrop" class="absolute inset-0 bg-black/50"></div>
+    <div class="absolute inset-0 overflow-y-auto">
+      <div class="min-h-full flex items-start justify-center p-4 sm:p-6">
+        <div class="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl my-6">
+
+          <!-- Header -->
+          <div class="flex items-center justify-between px-6 sm:px-10 py-5 border-b border-gray-200">
+            <span class="text-xs font-semibold tracking-[0.2em] text-gray-400">KOPLUS</span>
+            <h2 class="font-['Cal_Sans'] text-2xl md:text-3xl font-normal" style="color:#0a2240">Request a quote</h2>
+            <button id="quote-close" type="button" aria-label="Close" class="text-gray-400 hover:text-gray-700 transition">
+              <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- Product summary -->
+          <div id="quote-details" class="px-6 sm:px-10 pt-6">
+            <div class="flex flex-col sm:flex-row gap-6">
+              <div class="shrink-0 w-full sm:w-auto">
+                <div id="qmodal-thumb" class="relative aspect-[4/3] sm:aspect-[3/4] w-full sm:w-40 rounded-xl ring-1 ring-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-white"></div>
+                <div class="mt-3 font-['Noto_Sans'] text-lg font-medium text-center sm:text-left" style="color:#0a2240">${productTitle}</div>
+              </div>
+              <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-10 sm:self-start">
+                <div class="flex justify-between border-b border-gray-200 py-3"><span class="text-sm font-semibold text-gray-800">Frame</span><span id="qspec-frame" class="text-sm text-gray-500"></span></div>
+                <div class="flex justify-between border-b border-gray-200 py-3"><span class="text-sm font-semibold text-gray-800">Door</span><span id="qspec-door" class="text-sm text-gray-500"></span></div>
+                <div class="flex justify-between border-b border-gray-200 py-3"><span class="text-sm font-semibold text-gray-800">Interior</span><span id="qspec-interior" class="text-sm text-gray-500"></span></div>
+                <div class="flex justify-between border-b border-gray-200 py-3"><span class="text-sm font-semibold text-gray-800">Back panel</span><span id="qspec-panel" class="text-sm text-gray-500"></span></div>
+                <div class="flex justify-between border-b border-gray-200 py-3"><span class="text-sm font-semibold text-gray-800">Exterior</span><span id="qspec-exterior" class="text-sm text-gray-500"></span></div>
+                <div class="flex justify-between border-b border-gray-200 py-3"><span class="text-sm font-semibold text-gray-800">Tabletop Colour</span><span id="qspec-tabletop" class="text-sm text-gray-500"></span></div>
+                <div class="flex items-center justify-between py-3">
+                  <span class="text-sm font-semibold text-gray-800">Quantity</span>
+                  <div class="flex items-center rounded-lg ring-1 ring-gray-200 overflow-hidden">
+                    <button id="qty-minus" type="button" class="px-3 py-1.5 text-gray-500 hover:bg-gray-50">&minus;</button>
+                    <span id="qty-value" class="w-10 text-center text-sm font-medium text-gray-900">1</span>
+                    <button id="qty-plus" type="button" class="px-3 py-1.5 text-gray-500 hover:bg-gray-50">+</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lead form -->
+          <form id="quote-form" class="bg-gray-50 px-6 sm:px-10 py-8 mt-6 rounded-b-2xl">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <input name="firstName" required placeholder="First name *" class="qinput">
+              <input name="lastName" required placeholder="Last name *" class="qinput">
+              <input name="email" type="email" required placeholder="Email *" class="qinput sm:col-span-2">
+              <input name="phone" required placeholder="Phone *" class="qinput">
+              <input name="country" required placeholder="Country *" class="qinput">
+              <input name="address" placeholder="Address" class="qinput sm:col-span-2">
+              <input name="company" required placeholder="Company *" class="qinput">
+              <select name="companyType" required class="qinput qselect">
+                <option value="" disabled selected>Company type *</option>
+                <option>Corporate / End user</option>
+                <option>Reseller / Dealer</option>
+                <option>Architect / Designer</option>
+                <option>Other</option>
+              </select>
+              <select name="companySize" required class="qinput qselect sm:col-span-2">
+                <option value="" disabled selected>Company size *</option>
+                <option>1–10</option>
+                <option>11–50</option>
+                <option>51–200</option>
+                <option>201–500</option>
+                <option>500+</option>
+              </select>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+              <p class="text-xs text-gray-500">By submitting you agree to our <a href="#" class="underline font-medium text-gray-700">Privacy Policy</a>.</p>
+              <button type="submit" class="inline-flex items-center gap-2 px-8 py-3 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">
+                Submit
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+          </form>
+
+          <!-- Success state — replaces the summary + form once a quote is submitted. -->
+          <div id="quote-success" class="hidden px-6 sm:px-10 py-16 text-center">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <svg class="h-8 w-8 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>
+            </div>
+            <h3 class="mt-6 font-['Cal_Sans'] text-2xl md:text-3xl font-normal" style="color:#0a2240">Thank you!</h3>
+            <p class="mt-3 font-['Noto_Sans'] font-light text-base text-gray-500 max-w-md mx-auto">Your quote request has been received. Our team will be in touch shortly.</p>
+            <button id="quote-done" type="button" class="mt-8 inline-flex items-center gap-2 px-8 py-3 text-sm font-medium text-white rounded-full transition hover:opacity-90" style="background:#061629">Done</button>
+          </div>
+
+        </div>
+      </div>
     </div>
   </div>
 
@@ -976,6 +1200,19 @@ function SamApp(appConfig) {
     }
     .cfg-section + .cfg-section { border-top: 1px solid #f3f4f6; padding-top: 1.25rem; }
     .section-chevron svg { transition: transform 0.2s ease; }
+    /* Request-a-quote modal form controls */
+    .qinput {
+      width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:0.75rem;
+      padding:0.875rem 1rem; font-size:0.95rem; color:#111827; outline:none;
+      transition:border-color .15s ease, box-shadow .15s ease;
+    }
+    .qinput::placeholder { color:#9ca3af; }
+    .qinput:focus { border-color:#061629; box-shadow:0 0 0 3px rgba(6,22,41,0.08); }
+    .qselect {
+      appearance:none; -webkit-appearance:none; cursor:pointer; padding-right:2.5rem;
+      background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m19 9-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 1rem center; background-size:1.1rem;
+    }
     #img-placeholder.hidden { display: flex !important; opacity: 0; pointer-events: none; }
     /* Source renders come in a touch dark — lift the composited product.
        Stop-gap until/unless Koplus re-exports brighter layers. Tune here. */
