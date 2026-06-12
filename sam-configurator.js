@@ -1083,7 +1083,7 @@ function SamApp(appConfig) {
           <div id="quote-details" class="px-6 sm:px-10 pt-6">
             <div class="flex flex-col sm:flex-row gap-6">
               <div class="shrink-0 w-full sm:w-auto">
-                <div id="qmodal-thumb" class="relative aspect-[4/3] sm:aspect-[3/4] w-full sm:w-40 rounded-xl ring-1 ring-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-white"></div>
+                <div id="qmodal-thumb" class="relative aspect-[4/3] sm:aspect-square w-full sm:w-64 rounded-xl ring-1 ring-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-white"></div>
                 <div class="mt-3 font-['Noto_Sans'] text-lg font-medium text-center sm:text-left" style="color:#0a2240">${productTitle}</div>
               </div>
               <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-10 sm:self-start">
