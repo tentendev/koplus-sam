@@ -273,29 +273,44 @@ function SamApp(appConfig) {
       }
     }
 
-    // ── SKU builder ──
-    function getSKUs() {
-      const skus = {
-        door:     `L1_DR_YY_${state.door}`,
-        exterior: `L2_${config.skuPrefix}_NA_${state.exterior}`,
-        interior: `L4_${config.skuPrefix}_NA_${state.interior}`,
-        panel:    state.panel === config.allGlassCode
-                    ? `L5_${config.allGlassCode}_000`
-                    : `L5_${state.panel}_${state.interior}`
-      };
-      if (config.accessories) {
-        config.accessories.items.forEach(acc => {
-          if (!acc.layerKey) return;
-          skus[acc.layerKey] = state.accessories[acc.code]
-            ? acc.skuTemplate.replace("{colour}", state.accessoryColours[acc.code])
-            : null;
-        });
-      }
-      return skus;
+    // ── Layer URL builder — standardised Sam612 S3 layout ──
+    // Uniform across all products:
+    //   {base}/{slug}/L1-door/{door}.png
+    //   {base}/{slug}/L2-exterior/{colour}.png
+    //   {base}/{slug}/L4-interior/{colour}.png
+    //   {base}/{slug}/L5-panel/{panelCode}/{interior|000}.png   (000 = all-glass)
+    //   {base}/{slug}/L3-accessory/{type}/{colour}.png
+    // Asset base comes from the product's `assetBaseUrl` in Payload CMS
+    // (e.g. .../Sam612/single). Falls back to the standard Sam612 path by slug.
+    const productBase = config.assetBase || `https://kolo-website.s3.eu-west-1.amazonaws.com/Sam612/${config.key}`;
+
+    // Accessory type from its SKU template: "L3_AC_FB_{colour}" → "FB".
+    function accType(skuTemplate) {
+      const parts = skuTemplate.split("_");
+      return parts[parts.length - 2];
     }
 
-    const layerFolderMap = {};
-    config.layers.forEach(l => { layerFolderMap[l.key] = l.folder; });
+    // Returns the S3 URL for a layer key, or null if the layer is currently off.
+    function buildLayerUrl(key) {
+      switch (key) {
+        case "door":     return `${productBase}/L1-door/${state.door}.png`;
+        case "exterior": return `${productBase}/L2-exterior/${state.exterior}.png`;
+        case "interior": return `${productBase}/L4-interior/${state.interior}.png`;
+        case "panel": {
+          // Folder = the panel code itself (e.g. GS_NA, GS_GS). All-glass uses 000;
+          // wall panels take the interior colour.
+          const file = state.panel === config.allGlassCode ? "000" : state.interior;
+          return `${productBase}/L5-panel/${state.panel}/${file}.png`;
+        }
+        default: {
+          if (!config.accessories) return null;
+          const acc = config.accessories.items.find(a => a.layerKey === key);
+          if (!acc || !state.accessories[acc.code]) return null;
+          const colour = state.accessoryColours[acc.code];
+          return `${productBase}/L3-accessory/${accType(acc.skuTemplate)}/${colour}.png`;
+        }
+      }
+    }
 
     // ── Render ──
     root.innerHTML = buildHTML();
@@ -358,19 +373,17 @@ function SamApp(appConfig) {
     // new one is decoded, so the switch is instant and the layers never
     // desync — no fade-out gap, no flicker.
     function loadLayers(keys) {
-      const skus = getSKUs();
       const jobs = [];
       keys.forEach(key => {
         const img = layerEls[key];
         if (!img) return;
         const thumb = thumbEls[key];
-        const sku = skus[key];
-        if (!sku) {
+        const newSrc = buildLayerUrl(key);
+        if (!newSrc) {
           img.removeAttribute("src"); img.style.opacity = 0;
           if (thumb) { thumb.removeAttribute("src"); thumb.style.opacity = 0; }
           return;
         }
-        const newSrc = `${config.assetBase}/${layerFolderMap[key]}/${sku}.png`;
         if (img.src === newSrc && img.style.opacity === "1") return;
         const preload = new Image();
         preload.src = newSrc;
@@ -400,14 +413,12 @@ function SamApp(appConfig) {
       Object.values(thumbEls).forEach(img => { if (img) img.style.opacity = 0; });
       placeholder.classList.remove("hidden");
       const promises = config.layers.map(l => {
-        const skus = getSKUs();
-        const sku  = skus[l.key];
         const img  = layerEls[l.key];
         const thumb = thumbEls[l.key];
-        if (!img || !sku) return Promise.resolve();
+        const url = buildLayerUrl(l.key);
+        if (!img || !url) return Promise.resolve();
         return new Promise(resolve => {
           img.style.opacity = 0;
-          const url = `${config.assetBase}/${layerFolderMap[l.key]}/${sku}.png`;
           img.src = url;
           if (thumb) thumb.src = url;
           img.onload  = () => {
@@ -433,24 +444,26 @@ function SamApp(appConfig) {
     // Runs in the background after the initial booth has rendered.
     function prefetchVariants() {
       const urls = new Set();
-      const add = (folder, sku) => { if (folder && sku) urls.add(`${config.assetBase}/${folder}/${sku}.png`); };
+      const add = u => { if (u) urls.add(u); };
 
-      ["LT", "RT"].forEach(c => add(layerFolderMap.door, `L1_DR_YY_${c}`));
-      exteriorPalette.forEach(c => add(layerFolderMap.exterior, `L2_${config.skuPrefix}_NA_${c.code}`));
-      interiorPalette.forEach(c => add(layerFolderMap.interior, `L4_${config.skuPrefix}_NA_${c.code}`));
+      ["LT", "RT"].forEach(c => add(`${productBase}/L1-door/${c}.png`));
+      exteriorPalette.forEach(c => add(`${productBase}/L2-exterior/${c.code}.png`));
+      interiorPalette.forEach(c => add(`${productBase}/L4-interior/${c.code}.png`));
 
-      // Back panel walls take the interior colour, so prefetch every panel × interior combo.
-      add(layerFolderMap.panel, `L5_${config.allGlassCode}_000`);
+      // All-glass panel uses 000; wall panels take the interior colour.
       config.panels.forEach(p => {
-        if (p.code === config.allGlassCode) return;
-        interiorPalette.forEach(c => add(layerFolderMap.panel, `L5_${p.code}_${c.code}`));
+        if (p.code === config.allGlassCode) {
+          add(`${productBase}/L5-panel/${p.code}/000.png`);
+        } else {
+          interiorPalette.forEach(c => add(`${productBase}/L5-panel/${p.code}/${c.code}.png`));
+        }
       });
 
       if (config.accessories) {
         config.accessories.items.forEach(acc => {
           if (!acc.layerKey || !acc.skuTemplate) return;
           (acc.colours || []).forEach(c =>
-            add(layerFolderMap[acc.layerKey], acc.skuTemplate.replace("{colour}", c.code)));
+            add(`${productBase}/L3-accessory/${accType(acc.skuTemplate)}/${c.code}.png`));
         });
       }
 
