@@ -743,15 +743,16 @@ function SamApp(appConfig) {
 
     function openQuote() {
       fillQuoteSpecs();
-      // Reset to the form view (in case a prior submission left the success state).
+      // Show the form view. We intentionally DON'T reset the fields here, so if the
+      // user types something, closes, and reopens, their input is still there.
+      // (After a successful submit, the submit handler clears the form, so the next
+      // open starts blank.)
       const details = root.querySelector("#quote-details");
       const form    = root.querySelector("#quote-form");
       const success = root.querySelector("#quote-success");
       if (details) details.classList.remove("hidden");
-      if (form) { form.classList.remove("hidden"); form.reset(); }
+      if (form) form.classList.remove("hidden");
       if (success) success.classList.add("hidden");
-      quoteQty = 1;
-      const qv = root.querySelector("#qty-value"); if (qv) qv.textContent = "1";
       // Reuse the already-decoded summary-bar thumbnail for an instant preview
       // (strip ids so we don't duplicate them in the document).
       const qthumb = root.querySelector("#qmodal-thumb");
@@ -772,6 +773,11 @@ function SamApp(appConfig) {
       root.querySelector("#quote-close").addEventListener("click", closeQuote);
       root.querySelector("#quote-backdrop").addEventListener("click", closeQuote);
       root.querySelector("#quote-done").addEventListener("click", closeQuote);
+      root.querySelector("#quote-close-x").addEventListener("click", closeQuote);
+      // Click anywhere outside the panel (the scroll/centering area) closes the modal.
+      root.querySelector("#quote-scroll").addEventListener("click", e => {
+        if (!e.target.closest("#quote-panel")) closeQuote();
+      });
 
       // Quantity stepper
       const qtyVal = root.querySelector("#qty-value");
@@ -1067,14 +1073,14 @@ function SamApp(appConfig) {
   <div id="quote-modal" class="fixed inset-0 z-50 hidden">
     <div id="quote-backdrop" class="absolute inset-0 bg-black/50"></div>
     <div class="absolute inset-0 overflow-y-auto">
-      <div class="min-h-full flex items-start justify-center p-4 sm:p-6">
-        <div class="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl my-6">
+      <div id="quote-scroll" class="min-h-full flex items-start justify-center p-4 sm:p-6">
+        <div id="quote-panel" class="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl my-6">
 
           <!-- Header -->
           <div class="flex items-center justify-between px-6 sm:px-10 py-5 border-b border-gray-200">
             <span class="text-xs font-semibold tracking-[0.2em] text-gray-400">KOPLUS</span>
             <h2 class="font-['Cal_Sans'] text-2xl md:text-3xl font-normal" style="color:#0a2240">Request a quote</h2>
-            <button id="quote-close" type="button" aria-label="Close" class="text-gray-400 hover:text-gray-700 transition">
+            <button id="quote-close" type="button" aria-label="Close" class="hidden text-gray-400 hover:text-gray-700 transition">
               <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
             </button>
           </div>
@@ -1153,6 +1159,11 @@ function SamApp(appConfig) {
         </div>
       </div>
     </div>
+
+    <!-- Floating close — top-right of the overlay, outside the panel. -->
+    <button id="quote-close-x" type="button" aria-label="Close" class="absolute top-4 right-4 sm:top-5 sm:right-6 z-10 text-white/70 hover:text-white transition">
+      <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+    </button>
   </div>
 
   <style>
